@@ -84,9 +84,11 @@ func LinePrinterClosure(lp LinePrinter, log *log.Logger) LinePrinterFunc {
 	}
 }
 
+var output io.Writer = os.Stdout
+
 func main() {
-	lp := NewLinePrinter(os.Stdout)
-	logger := log.New(os.Stdout, "", log.LstdFlags)
+	lp := NewLinePrinter(output)
+	logger := log.New(output, "", log.LstdFlags)
 
 	printLine := LinePrinterClosure(lp, logger)
 
