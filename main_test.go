@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"io"
 	"log"
 	"testing"
 
@@ -65,6 +66,29 @@ func TestLinePrinterClosure(t *testing.T) {
 	}
 }
 
+type WriterStub struct {
+	n   int
+	err error
+}
+
+func (m WriterStub) Write(b []byte) (int, error) {
+	return m.n, m.err
+}
+
+type WriterSpy struct {
+	called     int
+	calledWith []byte
+
+	w io.Writer
+}
+
+func (m *WriterSpy) Write(b []byte) (int, error) {
+	m.called++
+	m.calledWith = append([]byte(nil), b...)
+
+	return m.w.Write(b)
+}
+
 type WriterMock struct {
 	mock.Mock
 }
@@ -73,6 +97,40 @@ func (m WriterMock) Write(b []byte) (int, error) {
 	args := m.Called(b)
 
 	return args.Int(0), args.Error(1)
+}
+
+func TestLinePrinterWithTestDoubles(t *testing.T) {
+	lp := NewLinePrinter(&WriterStub{n: 3})
+	err := lp.PrintLine("foo")
+	assert.NoError(t, err)
+
+	lp = NewLinePrinter(&WriterStub{err: errors.New("stuff")})
+	err = lp.PrintLine("foo")
+	assert.Error(t, err)
+
+	lp = NewLinePrinter(&WriterStub{n: -42})
+	err = lp.PrintLine("foo")
+	assert.Error(t, err)
+
+	spyWriter := &WriterSpy{
+		w: &WriterStub{n: 4},
+	}
+
+	lp = NewLinePrinter(spyWriter)
+	err = lp.PrintLine("foo")
+	assert.NoError(t, err)
+
+	assert.Equal(t, 1, spyWriter.called)
+	assert.Equal(t, []byte("foo\n"), spyWriter.calledWith)
+
+	mockWriter := new(WriterMock)
+	mockWriter.On("Write", []byte("foo\n")).Return(len("foo\n"), nil)
+
+	lp = NewLinePrinter(mockWriter)
+	err = lp.PrintLine("foo")
+	assert.NoError(t, err)
+
+	mockWriter.AssertExpectations(t)
 }
 
 func TestLinePrinter(t *testing.T) {
